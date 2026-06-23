@@ -79,9 +79,9 @@
       <!-- 小矮人炼金术士：三张 PNG 对应待机、熬制、审查状态 -->
       <div class="dwarf" id="dwarf">
         <div class="dwarf-aura"></div>
-        <img class="dwarf-asset dwarf-asset-main" src="assets/characters/dwarf-alchemist-main.png" alt="严肃的矮人炼金术士">
-        <img class="dwarf-asset dwarf-asset-stirring" src="assets/characters/dwarf-alchemist-stirring.png" alt="矮人炼金术士正在搅拌魔药">
-        <img class="dwarf-asset dwarf-asset-reviewing" src="assets/characters/dwarf-alchemist-reviewing.png" alt="矮人炼金术士正在审查知识">
+        <img class="dwarf-asset dwarf-asset-main" src="assets/characters/dwarf-alchemist-main.png" alt="严肃的矮人炼金术士" loading="eager" decoding="sync" fetchpriority="high">
+        <img class="dwarf-asset dwarf-asset-stirring" src="assets/characters/dwarf-alchemist-stirring.png" alt="矮人炼金术士正在搅拌魔药" loading="eager" decoding="async">
+        <img class="dwarf-asset dwarf-asset-reviewing" src="assets/characters/dwarf-alchemist-reviewing.png" alt="矮人炼金术士正在审查知识" loading="eager" decoding="async">
       </div>
 
       <!-- Canvas粒子 -->
@@ -110,9 +110,19 @@
         <textarea
           class="textarea"
           id="inputText"
-          placeholder="在此粘贴文字，或拖入 txt / md / docx / json 文件...（也可 Ctrl+V 粘贴文件）"
+          placeholder="在此粘贴文字，或选择 PDF / Word / MD / TXT 等文字文件..."
           rows="4"
         ></textarea>
+        <div class="file-actions">
+          <input
+            class="file-input"
+            id="fileInput"
+            type="file"
+            multiple
+            accept=".pdf,.docx,.doc,.md,.markdown,.txt,.json,.csv,.html,.xml,.log,text/*,application/pdf,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword">
+          <button class="btn-file" id="btnChooseFile" type="button">📎 选择文件</button>
+          <span class="file-hint" id="fileHint">支持 PDF、Word(docx)、Markdown、TXT、JSON、CSV，可多选</span>
+        </div>
         <div class="input-footer">
           <span class="char-count" id="charCount">0 字</span>
           <button class="btn-brew" id="btnBrew" disabled>
@@ -172,11 +182,11 @@
           🔑 DeepSeek API Key
         </label>
         <input type="password" id="apiKeyInput"
-          style="width:100%;padding:10px 14px;border:1px solid var(--bg-wood);border-radius:var(--radius-sm);font-family:monospace;font-size:0.8rem;background:var(--bg);outline:none;"
+          class="settings-input"
           placeholder="sk-xxxxxxxxxxxxxxxx">
         <div style="display:flex;gap:8px;margin-top:8px;">
           <button id="btnSaveKey" class="btn-brew" style="flex:1;">💾 保存</button>
-          <button id="btnClearKey" style="flex:1;padding:10px;background:var(--bg);border:1px solid #e0d0c0;border-radius:20px;cursor:pointer;font-family:var(--font-body);font-size:0.85rem;">🗑 清除</button>
+          <button id="btnClearKey" class="btn-soft" style="flex:1;">🗑 清除</button>
         </div>
         <div style="font-size:0.7rem;color:var(--text-muted);margin-top:6px;">
           Key 仅保存在此浏览器中，不会上传到任何服务器。
@@ -190,7 +200,7 @@
         </label>
         <input type="text" id="modelInput" list="modelSuggestions"
           placeholder="deepseek-v4-pro"
-          style="width:100%;padding:10px 14px;border:1px solid var(--bg-wood);border-radius:var(--radius-sm);font-family:monospace;font-size:0.85rem;background:var(--bg);outline:none;">
+          class="settings-input">
         <datalist id="modelSuggestions">
           <option value="deepseek-v4-pro">
           <option value="deepseek-chat">
@@ -209,7 +219,7 @@
         <div style="font-size:0.85rem;font-weight:600;color:var(--wood-dark);margin-bottom:8px;">📱 在手机上使用</div>
         <div style="font-size:0.8rem;color:var(--text-light);line-height:1.6;">
           <p>方法一：将此文件夹部署到 <b>GitHub Pages</b>（免费）</p>
-          <p>方法二：电脑运行 <code style="background:var(--bg);padding:2px 6px;border-radius:4px;">python -m http.server 8080</code>，手机连同一WiFi，访问 <code style="background:var(--bg);padding:2px 6px;border-radius:4px;">http://电脑IP:8080</code></p>
+          <p>方法二：电脑运行 <code class="inline-code">python -m http.server 8080</code>，手机连同一WiFi，访问 <code class="inline-code">http://电脑IP:8080</code></p>
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 /* ============================================
    app.js — 应用入口
-   支持多种文件格式：txt, md, json, csv, docx
+   支持多种文件格式：txt, md, json, csv, pdf, docx
    ============================================ */
 
 // 支持的文件类型
@@ -10,6 +10,7 @@ const SUPPORTED_TYPES = {
   'text/x-markdown': 'md',
   'text/csv': 'csv',
   'application/json': 'json',
+  'application/pdf': 'pdf',
   'text/html': 'html',
   'text/xml': 'xml',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
@@ -19,12 +20,19 @@ const SUPPORTED_TYPES = {
 // 文件扩展名映射
 const EXT_MAP = {
   'txt': true, 'md': true, 'csv': true, 'json': true,
-  'html': true, 'xml': true, 'log': true, 'docx': true, 'doc': true
+  'html': true, 'xml': true, 'log': true, 'pdf': true, 'docx': true, 'doc': true
 };
+
+let currentMaterialTitle = '';
+let currentMaterialType = 'paste';
 
 // ---- 读取文件 ----
 async function readFileContent(file) {
   const ext = file.name.split('.').pop().toLowerCase();
+
+  if (ext === 'pdf' || file.type === 'application/pdf') {
+    return await readPdf(file);
+  }
 
   // .docx 文件用 mammoth.js 提取文字
   if (ext === 'docx' || file.type.includes('wordprocessingml')) {
@@ -38,6 +46,33 @@ async function readFileContent(file) {
 
   // 纯文本类直接读取
   return await readAsText(file);
+}
+
+async function readFilesContent(files) {
+  const parts = [];
+  const failed = [];
+
+  for (const file of files) {
+    try {
+      const text = await readFileContent(file);
+      if (text && text.trim()) {
+        parts.push(`【文件：${file.name}】\n${text.trim()}`);
+      } else {
+        failed.push(`${file.name}：未提取到文字`);
+      }
+    } catch (err) {
+      failed.push(`${file.name}：${err.message || '读取失败'}`);
+    }
+  }
+
+  if (parts.length === 0) {
+    throw new Error(failed.join('\n') || '没有可用的文字内容');
+  }
+
+  return {
+    text: parts.join('\n\n---\n\n'),
+    failed
+  };
 }
 
 function readAsText(file) {
@@ -67,6 +102,64 @@ function readDocx(file) {
     reader.onerror = () => reject(new Error('文件读取失败'));
     reader.readAsArrayBuffer(file);
   });
+}
+
+function readPdf(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const pdfjsLib = await loadPdfJs();
+        const pdf = await pdfjsLib.getDocument({ data: reader.result }).promise;
+        const pages = [];
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const content = await page.getTextContent();
+          const text = content.items
+            .map((item) => item.str)
+            .filter(Boolean)
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          if (text) pages.push(`第 ${pageNum} 页\n${text}`);
+        }
+
+        resolve(pages.join('\n\n'));
+      } catch {
+        reject(new Error('PDF 解析失败：如果是扫描件图片 PDF，需要先 OCR 或复制文字'));
+      }
+    };
+    reader.onerror = () => reject(new Error('文件读取失败'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+let pdfJsLoaded = null;
+function loadPdfJs() {
+  if (pdfJsLoaded) return pdfJsLoaded;
+  if (window.pdfjsLib) {
+    pdfJsLoaded = Promise.resolve(window.pdfjsLib);
+    return pdfJsLoaded;
+  }
+
+  pdfJsLoaded = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
+    script.onload = () => {
+      if (!window.pdfjsLib) {
+        reject(new Error('PDF 解析组件加载失败'));
+        return;
+      }
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+      resolve(window.pdfjsLib);
+    };
+    script.onerror = () => reject(new Error('PDF 解析组件加载失败'));
+    document.head.appendChild(script);
+  });
+
+  return pdfJsLoaded;
 }
 
 let mammothLoaded = null;
@@ -110,11 +203,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   const inputText = document.getElementById('inputText');
   const charCount = document.getElementById('charCount');
   const btnBrew = document.getElementById('btnBrew');
+  const fileInput = document.getElementById('fileInput');
+  const btnChooseFile = document.getElementById('btnChooseFile');
+  const fileHint = document.getElementById('fileHint');
 
   inputText.addEventListener('input', () => {
     const len = inputText.value.length;
     charCount.textContent = `${len} 字`;
     btnBrew.disabled = len < 5;
+  });
+
+  btnChooseFile.addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', async () => {
+    const files = Array.from(fileInput.files || []);
+    if (files.length === 0) return;
+    await handleFilesInput(files);
+    fileInput.value = '';
   });
 
   // --- 文件拖拽（支持多格式） ---
@@ -133,34 +238,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     e.preventDefault();
     basket.classList.remove('drag-over');
 
-    const file = e.dataTransfer.files[0];
-    if (!file) return;
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length === 0) return;
 
-    await handleFileInput(file);
+    await handleFilesInput(files);
   });
 
   // --- 粘贴文件也可触发 ---
   document.addEventListener('paste', async (e) => {
-    const file = e.clipboardData?.files?.[0];
-    if (file && EXT_MAP[file.name.split('.').pop().toLowerCase()]) {
+    const files = Array.from(e.clipboardData?.files || []);
+    if (files.length > 0 && files.some(file => EXT_MAP[file.name.split('.').pop().toLowerCase()])) {
       e.preventDefault();
-      await handleFileInput(file);
+      await handleFilesInput(files);
     }
   });
 
-  async function handleFileInput(file) {
-    const ext = file.name.split('.').pop().toLowerCase();
+  async function handleFilesInput(files) {
+    const supportedFiles = files.filter(file => EXT_MAP[file.name.split('.').pop().toLowerCase()] || SUPPORTED_TYPES[file.type]);
+    if (supportedFiles.length === 0) {
+      alert('请选择包含文字的文件：PDF、Word(docx)、Markdown、TXT、JSON、CSV 等');
+      return;
+    }
 
-    // 显示加载状态
-    inputText.value = '⏳ 正在读取文件...';
+    inputText.value = `⏳ 正在读取 ${supportedFiles.length} 个文件...`;
     inputText.disabled = true;
     btnBrew.disabled = true;
+    fileHint.textContent = '正在提取文字，请稍候...';
+    fileHint.classList.add('has-file');
 
     try {
-      const text = await readFileContent(file);
+      const { text, failed } = await readFilesContent(supportedFiles);
       if (text && text.trim().length > 0) {
         inputText.value = text;
         inputText.dispatchEvent(new Event('input'));
+        currentMaterialTitle = supportedFiles.length === 1
+          ? supportedFiles[0].name
+          : `${supportedFiles[0].name} 等 ${supportedFiles.length} 个文件`;
+        currentMaterialType = 'file';
+        fileHint.textContent = failed.length
+          ? `已读取 ${supportedFiles.length - failed.length}/${supportedFiles.length} 个文件，部分失败可继续熬制`
+          : `已读取 ${supportedFiles.length} 个文件：${currentMaterialTitle}`;
       } else {
         inputText.value = '';
         alert('文件内容为空或无法识别文字，请尝试其他文件');
@@ -168,6 +285,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
       inputText.value = '';
       alert(err.message || '文件读取失败，请尝试粘贴文字内容');
+      fileHint.textContent = '读取失败，请换文件或直接粘贴文字';
     } finally {
       inputText.disabled = false;
     }
@@ -181,8 +299,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       await saveRawMaterial({
         content: text,
-        title: text.substring(0, 30) + '...',
-        type: 'paste'
+        title: currentMaterialTitle || text.substring(0, 30) + '...',
+        type: currentMaterialType
       });
 
       Alchemist.setState('receiving');
@@ -192,6 +310,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // 刷新魔药架和分类筛选栏
       await UI.renderShelf(UI.currentCategory);
+      currentMaterialTitle = '';
+      currentMaterialType = 'paste';
+      fileHint.textContent = '支持 PDF、Word(docx)、Markdown、TXT、JSON、CSV，可多选';
+      fileHint.classList.remove('has-file');
     } catch (err) {
       console.error('炼制失败:', err);
       alert('熬制过程中出了点问题，请重试');
