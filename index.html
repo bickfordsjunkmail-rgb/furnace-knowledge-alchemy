@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.json">
+<title>熔炉 · 知识炼金</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- 顶部栏 -->
+  <header class="header">
+    <span class="header-title">
+      <span class="icon">🌿</span> 炼金小屋
+    </span>
+  </header>
+
+  <!-- 标签导航 -->
+  <nav class="tabs">
+    <button class="tab active" data-panel="brew">🌱 投料</button>
+    <button class="tab" data-panel="shelf">🍯 药瓶架</button>
+    <button class="tab" data-panel="settings">⚙️</button>
+  </nav>
+
+  <!-- ========== 投料面板 ========== -->
+  <section class="panel active" id="panel-brew">
+
+    <!-- 炼金场景 -->
+    <div class="alchemy-scene" id="alchemyScene">
+
+      <!-- 天空 -->
+      <div class="scene-sky"></div>
+
+      <!-- 云 -->
+      <div class="cloud cloud-1"></div>
+      <div class="cloud cloud-2"></div>
+      <div class="cloud cloud-3"></div>
+
+      <!-- 小屋背景 -->
+      <div class="cottage">
+        <div class="cottage-roof"></div>
+        <div class="herb-bundle left">🌿</div>
+        <div class="herb-bundle right">🌸</div>
+        <div class="window left"></div>
+        <div class="window right"></div>
+        <div class="cottage-wall"></div>
+      </div>
+
+      <!-- 橡木桌 -->
+      <div class="oak-table"></div>
+
+      <!-- 石砌炉台 + 火 -->
+      <div class="hearth">
+        <div class="fire-container">
+          <div class="flame flame-1"></div>
+          <div class="flame flame-2"></div>
+          <div class="flame flame-3"></div>
+          <div class="flame-glow"></div>
+        </div>
+      </div>
+
+      <!-- 炼药锅 -->
+      <div class="cauldron">
+        <div class="cauldron-rim"></div>
+        <div class="potion-liquid" id="potionLiquid">
+          <div class="bubble bubble-1"></div>
+          <div class="bubble bubble-2"></div>
+          <div class="bubble bubble-3"></div>
+        </div>
+        <div class="cauldron-shine"></div>
+        <div class="cauldron-body"></div>
+      </div>
+
+      <!-- 小矮人炼金术士：三张 PNG 对应待机、熬制、审查状态 -->
+      <div class="dwarf" id="dwarf">
+        <div class="dwarf-aura"></div>
+        <img class="dwarf-asset dwarf-asset-main" src="assets/characters/dwarf-alchemist-main.png" alt="严肃的矮人炼金术士">
+        <img class="dwarf-asset dwarf-asset-stirring" src="assets/characters/dwarf-alchemist-stirring.png" alt="矮人炼金术士正在搅拌魔药">
+        <img class="dwarf-asset dwarf-asset-reviewing" src="assets/characters/dwarf-alchemist-reviewing.png" alt="矮人炼金术士正在审查知识">
+      </div>
+
+      <!-- Canvas粒子 -->
+      <canvas id="particleCanvas"></canvas>
+
+      <!-- 阶段指示器 -->
+      <div class="phase-indicator" id="phaseIndicator">
+        <span class="phase-step" data-phase="decompose">
+          <span class="phase-dot"></span> 分拣
+        </span>
+        <span>→</span>
+        <span class="phase-step" data-phase="review">
+          <span class="phase-dot"></span> 甄别
+        </span>
+        <span>→</span>
+        <span class="phase-step" data-phase="extract">
+          <span class="phase-dot"></span> 凝华
+        </span>
+      </div>
+    </div>
+
+    <!-- 输入区 -->
+    <div class="input-section">
+      <div class="input-basket" id="inputBasket">
+        <div class="input-label">🌱 放入草药篮</div>
+        <textarea
+          class="textarea"
+          id="inputText"
+          placeholder="在此粘贴文字，或拖入 txt / md / docx / json 文件...（也可 Ctrl+V 粘贴文件）"
+          rows="4"
+        ></textarea>
+        <div class="input-footer">
+          <span class="char-count" id="charCount">0 字</span>
+          <button class="btn-brew" id="btnBrew" disabled>
+            🍯 开始熬制
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 进度 -->
+    <div class="progress-section" id="progressSection">
+      <div class="progress-steps">
+        <span class="progress-step" data-step="decompose">🌿 分拣中</span>
+        <span class="progress-step" data-step="review">👀 甄别中</span>
+        <span class="progress-step" data-step="extract">✨ 凝华中</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ========== 魔药架面板 ========== -->
+  <section class="panel" id="panel-shelf">
+    <div class="shelf-section">
+      <div class="shelf-header">
+        <span class="shelf-title">🍯 药瓶架</span>
+      </div>
+
+      <input type="text" class="search-box" id="searchBox" placeholder="🔍 搜索药瓶...">
+
+      <div class="category-filters" id="categoryFilters">
+        <button class="cat-tag active" data-cat="全部">全部</button>
+        <!-- 其余分类由 UI.renderCategoryFilters() 动态生成 -->
+      </div>
+
+      <div class="card-grid" id="cardGrid">
+        <div class="empty-state">
+          <div class="icon">🧴</div>
+          <p>药瓶架还是空的</p>
+          <p style="font-size:0.75rem;margin-top:4px;">去「投料」放入第一批草药吧</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 设置面板 ========== -->
+  <section class="panel" id="panel-settings">
+    <div class="shelf-section">
+      <div class="shelf-header">
+        <span class="shelf-title">⚙️ 炼金设置</span>
+      </div>
+
+      <div style="background:var(--bg-card);border-radius:var(--radius);padding:16px;margin-bottom:16px;">
+        <label style="font-size:0.85rem;font-weight:600;color:var(--wood-dark);display:block;margin-bottom:8px;">
+          🔑 DeepSeek API Key
+        </label>
+        <input type="password" id="apiKeyInput"
+          style="width:100%;padding:10px 14px;border:1px solid var(--bg-wood);border-radius:var(--radius-sm);font-family:monospace;font-size:0.8rem;background:var(--bg);outline:none;"
+          placeholder="sk-xxxxxxxxxxxxxxxx">
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button id="btnSaveKey" class="btn-brew" style="flex:1;">💾 保存</button>
+          <button id="btnClearKey" style="flex:1;padding:10px;background:var(--bg);border:1px solid #e0d0c0;border-radius:20px;cursor:pointer;font-family:var(--font-body);font-size:0.85rem;">🗑 清除</button>
+        </div>
+        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:6px;">
+          Key 仅保存在此浏览器中，不会上传到任何服务器。
+          <a href="https://platform.deepseek.com/api_keys" target="_blank" style="color:var(--herb-dark);">获取 Key →</a>
+        </div>
+      </div>
+
+      <div style="background:var(--bg-card);border-radius:var(--radius);padding:16px;margin-bottom:16px;">
+        <label style="font-size:0.85rem;font-weight:600;color:var(--wood-dark);display:block;margin-bottom:8px;">
+          🤖 模型
+        </label>
+        <input type="text" id="modelInput" list="modelSuggestions"
+          placeholder="deepseek-v4-pro"
+          style="width:100%;padding:10px 14px;border:1px solid var(--bg-wood);border-radius:var(--radius-sm);font-family:monospace;font-size:0.85rem;background:var(--bg);outline:none;">
+        <datalist id="modelSuggestions">
+          <option value="deepseek-v4-pro">
+          <option value="deepseek-chat">
+          <option value="deepseek-reasoner">
+        </datalist>
+        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">
+          默认 deepseek-v4-pro，可输入任意模型名
+        </div>
+      </div>
+
+      <div id="apiStatus" style="text-align:center;font-size:0.8rem;color:var(--text-muted);padding:8px;">
+        未配置 API Key — 将使用本地模拟处理
+      </div>
+
+      <div style="background:var(--bg-card);border-radius:var(--radius);padding:16px;margin-bottom:16px;">
+        <div style="font-size:0.85rem;font-weight:600;color:var(--wood-dark);margin-bottom:8px;">📱 在手机上使用</div>
+        <div style="font-size:0.8rem;color:var(--text-light);line-height:1.6;">
+          <p>方法一：将此文件夹部署到 <b>GitHub Pages</b>（免费）</p>
+          <p>方法二：电脑运行 <code style="background:var(--bg);padding:2px 6px;border-radius:4px;">python -m http.server 8080</code>，手机连同一WiFi，访问 <code style="background:var(--bg);padding:2px 6px;border-radius:4px;">http://电脑IP:8080</code></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- 卡片详情弹窗 -->
+<div class="modal-overlay" id="modalOverlay" style="display:none;">
+  <div class="modal-sheet" id="modalSheet">
+    <div class="modal-handle"></div>
+    <div id="modalContent"></div>
+    <button class="modal-close" id="modalClose">关闭</button>
+  </div>
+</div>
+
+<script src="js/storage.js"></script>
+<script src="js/deepseek.js"></script>
+<script src="js/alchemist.js"></script>
+<script src="js/pipeline.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>

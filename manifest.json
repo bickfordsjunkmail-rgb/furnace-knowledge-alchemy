@@ -1,0 +1,16 @@
+{
+  "name": "熔炉 · 知识炼金",
+  "short_name": "知识炼金",
+  "description": "小矮人药剂师的知识炼金小屋",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f5f0e8",
+  "theme_color": "#8b5e3c",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧪</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
