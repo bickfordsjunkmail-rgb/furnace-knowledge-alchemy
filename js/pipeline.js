@@ -109,37 +109,29 @@ const Pipeline = {
     document.getElementById('progressSection').classList.add('visible');
     this.setProgress(0, null);
 
-    let cards;
+    let documentResult;
 
     if (DeepSeek.isConfigured()) {
       // 使用 DeepSeek 真实AI处理
       btn.textContent = '⚡ AI熬制中...';
       try {
-        cards = await DeepSeek.runFullPipeline(text, sourceName, (phase, pct) => {
+        const cards = await DeepSeek.runFullPipeline(text, sourceName, (phase, pct) => {
           this.setProgress(pct, phase);
           if (phase === 'decompose') Alchemist.setState('decomposing');
           if (phase === 'review') Alchemist.setState('reviewing');
           if (phase === 'extract') Alchemist.setState('extracting');
         });
 
-        // 存入 IndexedDB
-        for (const card of cards) {
-          await saveCard({
-            ...card,
-            source: sourceName,
-            status: 'final',
-            originalQuotes: card.originalQuotes || []
-          });
-        }
+        documentResult = await saveDocument(this.documentFromCards(cards, text, sourceName));
       } catch (err) {
         console.error('AI处理失败，降级到本地处理:', err);
         btn.textContent = '⏳ 降级处理中...';
-        cards = await this.runLocal(text, sourceName);
+        documentResult = await this.runLocal(text, sourceName);
       }
     } else {
       // 本地模拟处理
       btn.textContent = '⏳ 熬制中...';
-      cards = await this.runLocal(text, sourceName);
+      documentResult = await this.runLocal(text, sourceName);
     }
 
     this.setProgress(100, 'extract');
@@ -154,7 +146,7 @@ const Pipeline = {
       Alchemist.setState('idle');
     }, 2000);
 
-    return cards;
+    return documentResult;
   },
 
   // ----- 本地降级处理 -----
@@ -206,17 +198,139 @@ const Pipeline = {
     this.setProgress(75, 'extract');
     await this.sleep(400);
 
-    const cards = this.generateCards(text, sourceName);
+    const doc = this.generateDocument(text, sourceName);
 
     this.setProgress(90, 'extract');
     await this.sleep(300);
 
-    for (const card of cards) {
-      await saveCard(card);
-    }
+    const saved = await saveDocument(doc);
 
     this.setProgress(100, 'extract');
-    return cards;
+    return saved;
+  },
+
+  // ----- 一个来源只生成一个文档药瓶 -----
+  generateDocument(text, sourceName) {
+    const { category } = this.autoClassify(text);
+    const tags = this.extractTags(text, category);
+    const sections = this.extractSections(text);
+    const title = this.generateDocumentTitle(text, sourceName, category);
+    const summary = this.generateSummary(text);
+
+    return {
+      title,
+      summary,
+      content: text,
+      sections,
+      category,
+      tags,
+      confidence: category === '其他' ? '推测' : '推测',
+      source: sourceName,
+      fileName: sourceName,
+      triggers: '待标注',
+      status: 'draft',
+      wordCount: text.length
+    };
+  },
+
+  documentFromCards(cards, originalText, sourceName) {
+    const firstCard = cards[0] || {};
+    const sections = cards.map((card, idx) => ({
+      heading: card.title || `拆解 ${idx + 1}`,
+      summary: card.essence || '',
+      content: card.content || '',
+      keyPoints: this.extractKeyPoints(card.content || card.essence || ''),
+    }));
+
+    return {
+      title: sourceName && sourceName !== '手动投料'
+        ? sourceName
+        : (firstCard.title || this.generateDocumentTitle(originalText, sourceName, firstCard.category || '其他')),
+      summary: firstCard.essence || this.generateSummary(originalText),
+      content: originalText,
+      sections,
+      category: firstCard.category || this.autoClassify(originalText).category,
+      tags: Array.from(new Set(cards.flatMap(card => card.tags || []))).slice(0, 6),
+      confidence: firstCard.confidence || '推测',
+      source: sourceName,
+      fileName: sourceName,
+      triggers: firstCard.triggers || '待标注',
+      originalQuotes: cards.flatMap(card => card.originalQuotes || []).slice(0, 6),
+      status: 'final',
+      wordCount: originalText.length
+    };
+  },
+
+  generateDocumentTitle(text, sourceName, category) {
+    if (sourceName && sourceName !== '手动投料') {
+      return sourceName.replace(/\.[^.]+$/, '');
+    }
+    return this.generateTitle(text, category);
+  },
+
+  generateSummary(text) {
+    const cleaned = text
+      .replace(/[#>*`_\-\[\]]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return cleaned.substring(0, 120) + (cleaned.length > 120 ? '...' : '');
+  },
+
+  extractSections(text) {
+    const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
+    const sections = [];
+    let current = null;
+
+    for (const line of lines) {
+      const headingMatch = line.match(/^(#{1,4})\s*(.+)$/) || line.match(/^第[一二三四五六七八九十\d]+[章节条点、.．]\s*(.+)$/);
+      if (headingMatch) {
+        if (current) sections.push(this.finishSection(current));
+        current = { heading: (headingMatch[2] || headingMatch[1]).replace(/[*#]/g, '').trim(), lines: [] };
+      } else if (current) {
+        current.lines.push(line);
+      }
+    }
+
+    if (current) sections.push(this.finishSection(current));
+
+    if (sections.length === 0) {
+      const chunks = text
+        .split(/\n{2,}|(?=##\s)|(?=###\s)/)
+        .map(chunk => chunk.trim())
+        .filter(Boolean);
+
+      if (chunks.length > 1) {
+        return chunks.slice(0, 8).map((chunk, idx) => this.finishSection({
+          heading: `拆解 ${idx + 1}`,
+          lines: [chunk]
+        }));
+      }
+
+      return [this.finishSection({
+        heading: '完整整理',
+        lines: [text]
+      })];
+    }
+
+    return sections.slice(0, 12);
+  },
+
+  finishSection(section) {
+    const content = section.lines.join('\n').trim();
+    return {
+      heading: section.heading || '未命名小节',
+      summary: this.generateSummary(content),
+      content,
+      keyPoints: this.extractKeyPoints(content)
+    };
+  },
+
+  extractKeyPoints(text) {
+    return text
+      .split(/[。！？\n]+/)
+      .map(s => s.replace(/^[-*>\d.、\s]+/, '').trim())
+      .filter(s => s.length >= 8)
+      .slice(0, 4);
   },
 
   // ----- 生成卡片（自动分类版） -----

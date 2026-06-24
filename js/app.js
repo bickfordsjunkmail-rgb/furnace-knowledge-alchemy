@@ -181,6 +181,7 @@ function loadMammoth() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   await openDB();
+  await migrateLegacyCardsToDocuments();
   Alchemist.init();
 
   // --- 标签切换 ---
@@ -306,7 +307,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       Alchemist.setState('receiving');
       await Pipeline.sleep(600);
 
-      await Pipeline.run(text);
+      await Pipeline.run(text, currentMaterialTitle || '手动投料');
 
       // 刷新魔药架和分类筛选栏
       await UI.renderShelf(UI.currentCategory);

@@ -3,7 +3,7 @@
    ============================================ */
 
 const DB_NAME = 'AlchemyFurnace';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let db = null;
 
@@ -19,6 +19,13 @@ function openDB() {
         const store = db.createObjectStore('knowledge_cards', { keyPath: 'id' });
         store.createIndex('category', 'category', { unique: false });
         store.createIndex('status', 'status', { unique: false });
+        store.createIndex('createdAt', 'createdAt', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('knowledge_documents')) {
+        const store = db.createObjectStore('knowledge_documents', { keyPath: 'id' });
+        store.createIndex('category', 'category', { unique: false });
+        store.createIndex('status', 'status', { unique: false });
+        store.createIndex('source', 'source', { unique: false });
         store.createIndex('createdAt', 'createdAt', { unique: false });
       }
     };
@@ -161,4 +168,140 @@ function updateCard(id, updates) {
     };
     req.onerror = () => reject(req.error);
   });
+}
+
+// --- knowledge_documents ---
+
+function saveDocument(doc) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('knowledge_documents', 'readwrite');
+    const store = tx.objectStore('knowledge_documents');
+    const item = {
+      id: uuid(),
+      title: doc.title || '未命名药瓶',
+      summary: doc.summary || '',
+      content: doc.content || '',
+      sections: doc.sections || [],
+      category: doc.category || '其他',
+      tags: doc.tags || [],
+      source: doc.source || '',
+      fileName: doc.fileName || doc.source || '',
+      confidence: doc.confidence || '推测',
+      triggers: doc.triggers || '',
+      originalQuotes: doc.originalQuotes || [],
+      wordCount: doc.wordCount || (doc.content ? doc.content.length : 0),
+      status: doc.status || 'draft',
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    store.add(item);
+    tx.oncomplete = () => resolve(item);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function getAllDocuments() {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('knowledge_documents', 'readonly');
+    const store = tx.objectStore('knowledge_documents');
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result.sort((a, b) => b.createdAt - a.createdAt));
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function getDocumentsByCategory(category) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('knowledge_documents', 'readonly');
+    const store = tx.objectStore('knowledge_documents');
+    const index = store.index('category');
+    const req = index.getAll(category);
+    req.onsuccess = () => resolve(req.result.sort((a, b) => b.createdAt - a.createdAt));
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function searchDocuments(query) {
+  return getAllDocuments().then(docs => {
+    const q = query.toLowerCase();
+    return docs.filter(d =>
+      d.title.toLowerCase().includes(q) ||
+      d.summary.toLowerCase().includes(q) ||
+      d.content.toLowerCase().includes(q) ||
+      d.tags.some(t => t.toLowerCase().includes(q)) ||
+      (d.fileName || '').toLowerCase().includes(q)
+    );
+  });
+}
+
+function deleteDocument(id) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('knowledge_documents', 'readwrite');
+    const store = tx.objectStore('knowledge_documents');
+    store.delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function updateDocument(id, updates) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('knowledge_documents', 'readwrite');
+    const store = tx.objectStore('knowledge_documents');
+    const req = store.get(id);
+    req.onsuccess = () => {
+      const item = req.result;
+      if (!item) return reject(new Error('Not found'));
+      Object.assign(item, updates, { updatedAt: Date.now() });
+      store.put(item);
+      tx.oncomplete = () => resolve(item);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getDistinctDocumentCategories() {
+  const docs = await getAllDocuments();
+  const cats = new Set(docs.map(d => d.category));
+  return Array.from(cats).sort();
+}
+
+async function migrateLegacyCardsToDocuments() {
+  const docs = await getAllDocuments();
+  if (docs.length > 0) return;
+
+  const cards = await getAllCards();
+  if (cards.length === 0) return;
+
+  const groups = new Map();
+  for (const card of cards) {
+    const key = card.source || '历史药瓶';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(card);
+  }
+
+  for (const [source, group] of groups) {
+    const sorted = group.sort((a, b) => a.createdAt - b.createdAt);
+    const first = sorted[0];
+    await saveDocument({
+      title: source && source !== '手动投料' ? source.replace(/\.[^.]+$/, '') : first.title,
+      summary: first.essence || first.content?.substring(0, 120) || '',
+      content: sorted.map(card => `## ${card.title}\n${card.content || card.essence || ''}`).join('\n\n'),
+      sections: sorted.map(card => ({
+        heading: card.title,
+        summary: card.essence,
+        content: card.content || card.essence || '',
+        keyPoints: [card.essence].filter(Boolean)
+      })),
+      category: first.category || '其他',
+      tags: Array.from(new Set(sorted.flatMap(card => card.tags || []))).slice(0, 8),
+      source,
+      fileName: source,
+      confidence: first.confidence || '推测',
+      triggers: first.triggers || '待标注',
+      originalQuotes: sorted.flatMap(card => card.originalQuotes || []).slice(0, 8),
+      wordCount: sorted.reduce((sum, card) => sum + ((card.content || '').length), 0),
+      status: 'migrated'
+    });
+  }
 }
