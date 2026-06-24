@@ -8,7 +8,7 @@ const checks = [
   {
     name: 'renderer normalizes flattened markdown before rendering',
     pass: /normalizeReadingText\(/.test(ui) &&
-      /renderMarkdownLite\(text\)[\s\S]{0,180}normalizeReadingText\(text\)/.test(ui),
+      /renderMarkdownLite\(text\)[\s\S]{0,220}readingParagraphs\(text\)/.test(ui),
   },
   {
     name: 'renderer removes raw file header markers from reading text',
@@ -19,8 +19,8 @@ const checks = [
     pass: /displayHeading/.test(ui) && /displaySummary/.test(ui),
   },
   {
-    name: 'raw quote and heading symbols are handled after normalization',
-    pass: ui.includes("replace(/\\s+>\\s*/g, '\\n> ')") &&
+    name: 'raw quote and heading symbols are removed after normalization',
+    pass: ui.includes("replace(/[>＞]+/g, ' ')") &&
       ui.includes("replace(/\\s+(#{1,4})\\s*/g, '\\n$1 ')"),
   },
 ];

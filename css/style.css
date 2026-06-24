@@ -1786,6 +1786,27 @@ body::before {
   overflow: hidden;
 }
 
+.section-card-header {
+  padding: 14px 14px 12px;
+  border-bottom: 1px solid rgba(153, 104, 35, 0.1);
+  background: rgba(255, 248, 226, 0.68);
+}
+
+.section-card-header h2 {
+  margin: 0;
+  color: #21160e;
+  font-size: 1rem;
+  line-height: 1.42;
+  font-weight: 850;
+}
+
+.section-card-header p {
+  margin: 6px 0 0;
+  color: #7b6b59;
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
 .document-section summary {
   list-style: none;
   padding: 13px 14px;
@@ -1842,7 +1863,25 @@ body::before {
 }
 
 .section-body {
+  display: grid;
+  gap: 10px;
   padding: 12px 14px 16px;
+}
+
+.reading-block {
+  border: 1px solid rgba(153, 104, 35, 0.1);
+  border-radius: 11px;
+  background: rgba(255, 253, 245, 0.78);
+  padding: 11px 12px;
+  box-shadow: 0 6px 16px rgba(93, 63, 31, 0.06);
+}
+
+.reading-block h3 {
+  margin: 0 0 7px;
+  color: #24170d;
+  font-size: 0.96rem;
+  line-height: 1.45;
+  font-weight: 850;
 }
 
 .section-body p,
@@ -1850,7 +1889,12 @@ body::before {
   color: #2f2418;
   font-size: 0.92rem;
   line-height: 1.9;
-  margin-bottom: 10px;
+  margin: 0 0 10px;
+}
+
+.section-body p:last-child,
+.reading-content p:last-child {
+  margin-bottom: 0;
 }
 
 .section-body h3,
@@ -1953,6 +1997,18 @@ body::before {
     gap: 10px;
   }
 
+  .section-card-header {
+    padding: 13px 12px 11px;
+  }
+
+  .section-card-header h2 {
+    font-size: 0.98rem;
+  }
+
+  .section-card-header p {
+    font-size: 0.76rem;
+  }
+
   .document-section summary {
     padding: 12px;
   }
@@ -1973,5 +2029,18 @@ body::before {
   .reading-content p {
     font-size: 0.88rem;
     line-height: 1.78;
+  }
+
+  .section-body {
+    padding: 10px 12px 14px;
+  }
+
+  .reading-block {
+    padding: 10px 11px;
+    border-radius: 10px;
+  }
+
+  .reading-block h3 {
+    font-size: 0.92rem;
   }
 }

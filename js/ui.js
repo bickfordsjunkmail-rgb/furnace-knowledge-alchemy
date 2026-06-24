@@ -150,24 +150,21 @@ const UI = {
         <div class="reading-content">
           ${doc.sections.map((section, idx) => `
             <section class="document-section">
-              <details>
-                <summary>
-                  <span>${this.escape(this.displayHeading(section.heading || `小节 ${idx + 1}`))}</span>
-                  ${section.summary ? `<small>${this.escape(this.displaySummary(section.summary))}</small>` : ''}
-                  <em class="section-toggle-hint">点开看正文</em>
-                </summary>
-                ${section.keyPoints && section.keyPoints.length ? `
-                  <div class="key-points">
-                    ${section.keyPoints.map(point => `<div class="key-point">${this.escape(this.cleanReadingText(point))}</div>`).join('')}
-                  </div>
-                ` : ''}
-                <div class="section-body">${this.renderMarkdownLite(section.content || '')}</div>
-              </details>
+              <div class="section-card-header">
+                <h2>${this.escape(this.displayHeading(section.heading || `小节 ${idx + 1}`))}</h2>
+                ${section.summary ? `<p>${this.escape(this.displaySummary(section.summary))}</p>` : ''}
+              </div>
+              ${section.keyPoints && section.keyPoints.length ? `
+                <div class="key-points">
+                  ${section.keyPoints.map(point => `<div class="key-point">${this.escape(this.cleanReadingText(point))}</div>`).join('')}
+                </div>
+              ` : ''}
+              <div class="section-body">${this.renderReadingBlocks(section.content || section.summary || '')}</div>
             </section>
           `).join('')}
         </div>
       ` : `
-        <div class="reading-content">${this.renderMarkdownLite(doc.content || '')}</div>
+        <div class="reading-content">${this.renderReadingBlocks(doc.content || '')}</div>
       `}
 
       ${doc.originalQuotes && doc.originalQuotes.length > 0 ? `
@@ -234,8 +231,9 @@ const UI = {
       .replace(/\*\*(.+?)\*\*/g, '$1')
       .replace(/`{1,3}/g, '')
       .replace(/#{1,6}\s*/g, '')
-      .replace(/^\s*>\s*/gm, '')
-      .replace(/\s+>\s*/g, ' ')
+      .replace(/[>＞]+/g, ' ')
+      .replace(/^\s*[-*]\s*/gm, '')
+      .replace(/^\s*\d+[.、]\s*/gm, '')
       .replace(/\s+/g, ' ')
       .replace(/^[。；;、\s]+/, '')
       .trim();
@@ -247,38 +245,58 @@ const UI = {
       .replace(/\r\n/g, '\n')
       .replace(/【文件：[^】]+】/g, '\n')
       .replace(/\s+(#{1,4})\s*/g, '\n$1 ')
-      .replace(/\s+>\s*/g, '\n> ')
+      .replace(/\s+[>＞]\s*/g, '\n')
       .replace(/([。！？])\s+(规则\s*\d+[：:])/g, '$1\n## $2')
       .replace(/([。！？])\s+(\d+[.、]\s*)/g, '$1\n$2')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
   },
 
+  readingParagraphs(text) {
+    return this.normalizeReadingText(text)
+      .split('\n')
+      .map(line => this.cleanReadingText(line))
+      .filter(line => line && !/^[-*#>`]+$/.test(line))
+      .filter((line, index, arr) => arr.indexOf(line) === index);
+  },
+
+  isReadingHeading(line) {
+    return line.length <= 42 &&
+      /^(总纲|规则\s*\d+|第\s*\d+|理解|什么|说错|每日|一句话|判断|框架|原则|\d+[.、]\s*)/.test(line);
+  },
+
+  renderReadingBlocks(text) {
+    const paragraphs = this.readingParagraphs(text);
+    if (!paragraphs.length) return '';
+
+    const blocks = [];
+    let current = null;
+
+    for (const line of paragraphs) {
+      if (this.isReadingHeading(line)) {
+        if (current) blocks.push(current);
+        current = { title: line, body: [] };
+      } else if (current) {
+        current.body.push(line);
+      } else {
+        blocks.push({ title: '', body: [line] });
+      }
+    }
+    if (current) blocks.push(current);
+
+    return blocks.map(block => `
+      <div class="reading-block">
+        ${block.title ? `<h3>${this.escape(block.title)}</h3>` : ''}
+        ${block.body.map(line => `<p>${this.escape(line)}</p>`).join('')}
+      </div>
+    `).join('');
+  },
+
   renderMarkdownLite(text) {
     if (!text) return '';
-    const normalized = this.normalizeReadingText(text);
-    const lines = normalized
-      .split('\n')
-      .filter(l => l.trim())
-      .map(l => l.trim());
-
-    return lines.map(line => {
-      if (/^#{1,4}\s+/.test(line)) {
-        const level = Math.min((line.match(/^#+/) || [''])[0].length, 3);
-        const label = this.cleanReadingText(line.replace(/^#{1,4}\s+/, ''));
-        return `<h${level + 2}>${this.escape(label)}</h${level + 2}>`;
-      }
-      if (/^>\s?/.test(line)) {
-        return `<blockquote>${this.escape(this.cleanReadingText(line.replace(/^>\s?/, '')))}</blockquote>`;
-      }
-      if (/^[-*]\s+/.test(line)) {
-        return `<p class="list-line">• ${this.escape(this.cleanReadingText(line.replace(/^[-*]\s+/, '')))}</p>`;
-      }
-      if (/^\d+[.、]\s+/.test(line)) {
-        return `<p class="list-line">${this.escape(this.cleanReadingText(line))}</p>`;
-      }
-      return `<p>${this.escape(this.cleanReadingText(line))}</p>`;
-    }).join('');
+    return this.readingParagraphs(text)
+      .map(line => `<p>${this.escape(line)}</p>`)
+      .join('');
   },
 
   formatContent(text) {
