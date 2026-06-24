@@ -145,10 +145,11 @@ const UI = {
         <div class="reading-content">
           ${doc.sections.map((section, idx) => `
             <section class="document-section">
-              <details ${idx === 0 ? 'open' : ''}>
+              <details>
                 <summary>
                   <span>${this.escape(section.heading || `小节 ${idx + 1}`)}</span>
                   ${section.summary ? `<small>${this.escape(section.summary)}</small>` : ''}
+                  <em class="section-toggle-hint">点开看正文</em>
                 </summary>
                 ${section.keyPoints && section.keyPoints.length ? `
                   <div class="key-points">

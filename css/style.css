@@ -1808,6 +1808,18 @@ body::before {
   line-height: 1.45;
 }
 
+.section-toggle-hint {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(64, 40, 18, 0.08);
+  color: #8a6a35;
+  font-style: normal;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
 .document-section[open] summary {
   border-bottom: 1px solid rgba(153, 104, 35, 0.12);
   background: rgba(246, 198, 91, 0.12);
@@ -1930,5 +1942,36 @@ body::before {
 
   .input-basket {
     padding: 15px;
+  }
+
+  .modal-sheet {
+    max-height: 86vh;
+    padding: 18px 14px 26px;
+  }
+
+  .reading-content {
+    gap: 10px;
+  }
+
+  .document-section summary {
+    padding: 12px;
+  }
+
+  .document-section summary span {
+    display: block;
+    font-size: 0.96rem;
+  }
+
+  .document-section summary small {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .section-body p,
+  .reading-content p {
+    font-size: 0.88rem;
+    line-height: 1.78;
   }
 }
