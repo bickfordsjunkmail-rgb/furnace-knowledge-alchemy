@@ -71,12 +71,14 @@ const UI = {
     const icon = this.CATEGORY_ICONS[doc.category] || '📄';
     const created = doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('zh-CN') : '';
     const sectionCount = Array.isArray(doc.sections) ? doc.sections.length : 0;
+    const title = this.cleanReadingText(doc.title);
+    const summary = this.cleanReadingText(doc.summary || doc.content?.substring(0, 90) || '');
     return `
       <article class="document-card" style="--cat-color:${color}" onclick="UI.openDocument('${doc.id}')">
         <div class="document-icon">${icon}</div>
         <div class="document-main">
-          <div class="document-title">${this.escape(doc.title)}</div>
-          <div class="document-summary">${this.escape(doc.summary || doc.content?.substring(0, 90) || '')}</div>
+          <div class="document-title">${this.escape(title)}</div>
+          <div class="document-summary">${this.escape(summary)}</div>
           <div class="document-meta">
             <span>${this.escape(doc.category)}</span>
             <span>${sectionCount} 个小节</span>
@@ -120,11 +122,14 @@ const UI = {
     const modal = document.getElementById('modalOverlay');
     const content = document.getElementById('modalContent');
 
+    const displayTitle = this.cleanReadingText(doc.title);
+    const displaySummary = this.cleanReadingText(doc.summary || '已收录为一份完整文件药瓶');
+
     content.innerHTML = `
       <header class="reading-header">
         <div class="reading-source">${this.escape(doc.fileName || doc.source || '手动投料')}</div>
-        <h1 class="modal-title">${this.escape(doc.title)}</h1>
-        <div class="modal-essence">💡 ${this.escape(doc.summary || '已收录为一份完整文件药瓶')}</div>
+        <h1 class="modal-title">${this.escape(displayTitle)}</h1>
+        <div class="modal-essence">💡 ${this.escape(displaySummary)}</div>
       </header>
 
       <div class="modal-meta-row document-meta-row">
@@ -147,13 +152,13 @@ const UI = {
             <section class="document-section">
               <details>
                 <summary>
-                  <span>${this.escape(section.heading || `小节 ${idx + 1}`)}</span>
-                  ${section.summary ? `<small>${this.escape(section.summary)}</small>` : ''}
+                  <span>${this.escape(this.displayHeading(section.heading || `小节 ${idx + 1}`))}</span>
+                  ${section.summary ? `<small>${this.escape(this.displaySummary(section.summary))}</small>` : ''}
                   <em class="section-toggle-hint">点开看正文</em>
                 </summary>
                 ${section.keyPoints && section.keyPoints.length ? `
                   <div class="key-points">
-                    ${section.keyPoints.map(point => `<div class="key-point">${this.escape(point)}</div>`).join('')}
+                    ${section.keyPoints.map(point => `<div class="key-point">${this.escape(this.cleanReadingText(point))}</div>`).join('')}
                   </div>
                 ` : ''}
                 <div class="section-body">${this.renderMarkdownLite(section.content || '')}</div>
@@ -212,9 +217,47 @@ const UI = {
     return div.innerHTML;
   },
 
+  displayHeading(text) {
+    const cleaned = this.cleanReadingText(text);
+    return cleaned || '未命名小节';
+  },
+
+  displaySummary(text) {
+    const cleaned = this.cleanReadingText(text);
+    return cleaned.length > 96 ? cleaned.substring(0, 96) + '...' : cleaned;
+  },
+
+  cleanReadingText(text) {
+    if (!text) return '';
+    return String(text)
+      .replace(/【文件：[^】]+】/g, '')
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/`{1,3}/g, '')
+      .replace(/#{1,6}\s*/g, '')
+      .replace(/^\s*>\s*/gm, '')
+      .replace(/\s+>\s*/g, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/^[。；;、\s]+/, '')
+      .trim();
+  },
+
+  normalizeReadingText(text) {
+    if (!text) return '';
+    return String(text)
+      .replace(/\r\n/g, '\n')
+      .replace(/【文件：[^】]+】/g, '\n')
+      .replace(/\s+(#{1,4})\s*/g, '\n$1 ')
+      .replace(/\s+>\s*/g, '\n> ')
+      .replace(/([。！？])\s+(规则\s*\d+[：:])/g, '$1\n## $2')
+      .replace(/([。！？])\s+(\d+[.、]\s*)/g, '$1\n$2')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  },
+
   renderMarkdownLite(text) {
     if (!text) return '';
-    const lines = text
+    const normalized = this.normalizeReadingText(text);
+    const lines = normalized
       .split('\n')
       .filter(l => l.trim())
       .map(l => l.trim());
@@ -222,19 +265,19 @@ const UI = {
     return lines.map(line => {
       if (/^#{1,4}\s+/.test(line)) {
         const level = Math.min((line.match(/^#+/) || [''])[0].length, 3);
-        const label = line.replace(/^#{1,4}\s+/, '');
+        const label = this.cleanReadingText(line.replace(/^#{1,4}\s+/, ''));
         return `<h${level + 2}>${this.escape(label)}</h${level + 2}>`;
       }
       if (/^>\s?/.test(line)) {
-        return `<blockquote>${this.escape(line.replace(/^>\s?/, ''))}</blockquote>`;
+        return `<blockquote>${this.escape(this.cleanReadingText(line.replace(/^>\s?/, '')))}</blockquote>`;
       }
       if (/^[-*]\s+/.test(line)) {
-        return `<p class="list-line">• ${this.escape(line.replace(/^[-*]\s+/, ''))}</p>`;
+        return `<p class="list-line">• ${this.escape(this.cleanReadingText(line.replace(/^[-*]\s+/, '')))}</p>`;
       }
       if (/^\d+[.、]\s+/.test(line)) {
-        return `<p class="list-line">${this.escape(line)}</p>`;
+        return `<p class="list-line">${this.escape(this.cleanReadingText(line))}</p>`;
       }
-      return `<p>${this.escape(line).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')}</p>`;
+      return `<p>${this.escape(this.cleanReadingText(line))}</p>`;
     }).join('');
   },
 
