@@ -31,8 +31,9 @@ const checks = [
       /getAllDocuments\(/.test(ui),
   },
   {
-    name: 'detail view renders markdown into structured reading blocks',
-    pass: /renderMarkdownLite\(/.test(ui) &&
+    name: 'detail view renders sections into clean reading cards',
+    pass: /renderSectionBody\(/.test(ui) &&
+      /renderKeySentence\(/.test(ui) &&
       /document-section/.test(ui) &&
       !/formatContent\(card\.content\)/.test(ui),
   },

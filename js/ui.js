@@ -124,12 +124,18 @@ const UI = {
 
     const displayTitle = this.cleanReadingText(doc.title);
     const displaySummary = this.cleanReadingText(doc.summary || '已收录为一份完整文件药瓶');
+    const readingKeywords = this.getReadingKeywords(doc);
 
     content.innerHTML = `
       <header class="reading-header">
         <div class="reading-source">${this.escape(doc.fileName || doc.source || '手动投料')}</div>
         <h1 class="modal-title">${this.escape(displayTitle)}</h1>
         <div class="modal-essence">💡 ${this.escape(displaySummary)}</div>
+        ${readingKeywords.length ? `
+          <div class="reading-keywords">
+            ${readingKeywords.map(tag => `<span>${this.escape(tag)}</span>`).join('')}
+          </div>
+        ` : ''}
       </header>
 
       <div class="modal-meta-row document-meta-row">
@@ -154,12 +160,8 @@ const UI = {
                 <h2>${this.escape(this.displayHeading(section.heading || `小节 ${idx + 1}`))}</h2>
                 ${section.summary ? `<p>${this.escape(this.displaySummary(section.summary))}</p>` : ''}
               </div>
-              ${section.keyPoints && section.keyPoints.length ? `
-                <div class="key-points">
-                  ${section.keyPoints.map(point => `<div class="key-point">${this.escape(this.cleanReadingText(point))}</div>`).join('')}
-                </div>
-              ` : ''}
-              <div class="section-body">${this.renderReadingBlocks(section.content || section.summary || '')}</div>
+              <div class="section-body">${this.renderSectionBody(section)}</div>
+              ${this.renderKeySentence(section)}
             </section>
           `).join('')}
         </div>
@@ -177,9 +179,11 @@ const UI = {
       <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:12px;">
         🎯 触发场景：${this.escape(doc.triggers || '待标注')}
       </div>
-      <div class="tag-row">
-        ${(doc.tags || []).map(t => `<span class="card-tag">#${this.escape(t)}</span>`).join('')}
-      </div>
+      ${doc.tags && doc.tags.length ? `
+        <div class="tag-row">
+          ${doc.tags.map(t => `<span class="card-tag">#${this.escape(t)}</span>`).join('')}
+        </div>
+      ` : ''}
       <div style="display:flex;gap:8px;">
         <button onclick="UI.deleteDocument('${doc.id}')" class="btn-danger">
           🗑 丢弃
@@ -212,6 +216,14 @@ const UI = {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  },
+
+  getReadingKeywords(doc) {
+    const tags = Array.isArray(doc.tags) ? doc.tags : [];
+    const base = [doc.category, ...tags]
+      .map(tag => this.cleanReadingText(tag))
+      .filter(Boolean);
+    return [...new Set(base)].slice(0, 4);
   },
 
   displayHeading(text) {
@@ -263,6 +275,48 @@ const UI = {
   isReadingHeading(line) {
     return line.length <= 42 &&
       /^(总纲|规则\s*\d+|第\s*\d+|理解|什么|说错|每日|一句话|判断|框架|原则|\d+[.、]\s*)/.test(line);
+  },
+
+  renderSectionBody(section) {
+    const heading = this.displayHeading(section.heading || '');
+    const summary = this.displaySummary(section.summary || '');
+    const keySentence = this.extractKeySentence(section);
+    const repeated = new Set([heading, summary, keySentence].filter(Boolean));
+    const source = section.content || section.summary || '';
+    let paragraphs = this.readingParagraphs(source)
+      .filter(line => !repeated.has(line))
+      .filter(line => !this.isReadingHeading(line));
+
+    if (!paragraphs.length && summary) paragraphs = [summary];
+
+    return paragraphs
+      .map(line => `<p>${this.escape(line)}</p>`)
+      .join('');
+  },
+
+  extractKeySentence(section) {
+    const points = Array.isArray(section.keyPoints) ? section.keyPoints : [];
+    const candidates = [
+      ...points,
+      ...(section.content ? this.readingParagraphs(section.content).filter(line => /一句话|关键句|公式|→/.test(line)) : []),
+      section.summary,
+    ];
+    const cleaned = candidates
+      .map(item => this.cleanReadingText(item))
+      .filter(Boolean)
+      .filter(line => line.length <= 90);
+    return cleaned[0] || '';
+  },
+
+  renderKeySentence(section) {
+    const keySentence = this.extractKeySentence(section);
+    if (!keySentence) return '';
+    return `
+      <div class="key-sentence">
+        <span>关键句</span>
+        <strong>${this.escape(keySentence)}</strong>
+      </div>
+    `;
   },
 
   renderReadingBlocks(text) {

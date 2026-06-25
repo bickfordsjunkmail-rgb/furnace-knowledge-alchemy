@@ -12,9 +12,9 @@ const checks = [
       !/section-toggle-hint/.test(ui),
   },
   {
-    name: 'section body is rendered through clean reading blocks',
-    pass: /renderReadingBlocks\(section\.content/.test(ui) &&
-      /reading-block/.test(ui),
+    name: 'section body is rendered through one clean rule-card body',
+    pass: /renderSectionBody\(section/.test(ui) &&
+      /key-sentence/.test(ui),
   },
   {
     name: 'mobile reading layout keeps desktop-like stacked cards',
