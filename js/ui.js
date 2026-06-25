@@ -61,7 +61,7 @@ const UI = {
         <div class="daily-review-card">
           <div class="daily-review-kicker">今日回看</div>
           <button class="daily-review-main" onclick="UI.openDailyReview('${daily.id}')">
-            <strong>${this.escape(this.cleanReadingText(daily.title))}</strong>
+            <strong>${this.escape(this.homeDisplayTitle(daily))}</strong>
             <span>${this.escape(this.displaySummary(daily.summary || daily.content || ''))}</span>
           </button>
           <button class="daily-review-shuffle" onclick="UI.shuffleDailyReview('${daily.id}')">换一条</button>
@@ -73,7 +73,7 @@ const UI = {
           ${docs.map(doc => `
             <button class="home-review-item" onclick="UI.openDocument('${doc.id}')">
               <span>${doc.favorite ? '★' : '↺'}</span>
-              <strong>${this.escape(this.cleanReadingText(doc.title))}</strong>
+              <strong>${this.escape(this.homeDisplayTitle(doc))}</strong>
             </button>
           `).join('')}
         </div>
@@ -332,7 +332,7 @@ const UI = {
       <div class="daily-review-card">
         <div class="daily-review-kicker">今日回看</div>
         <button class="daily-review-main" onclick="UI.openDailyReview('${daily.id}')">
-          <strong>${this.escape(this.cleanReadingText(daily.title))}</strong>
+          <strong>${this.escape(this.homeDisplayTitle(daily))}</strong>
           <span>${this.escape(this.displaySummary(daily.summary || daily.content || ''))}</span>
         </button>
         <button class="daily-review-shuffle" onclick="UI.shuffleDailyReview('${daily.id}')">换一条</button>
@@ -383,6 +383,28 @@ const UI = {
       .map(tag => this.cleanReadingText(tag))
       .filter(Boolean);
     return [...new Set(base)].slice(0, 4);
+  },
+
+  looksLikeHashTitle(text) {
+    const cleaned = this.cleanReadingText(text);
+    return /^[a-f0-9]{16,}$/i.test(cleaned) || /^[0-9a-z_-]{22,}$/i.test(cleaned);
+  },
+
+  homeDisplayTitle(doc) {
+    const candidates = [
+      doc.title,
+      doc.summary,
+      doc.fileName,
+      doc.source,
+      doc.content
+    ];
+    for (const candidate of candidates) {
+      const cleaned = this.cleanReadingText(candidate || '');
+      if (cleaned && !this.looksLikeHashTitle(cleaned)) {
+        return cleaned.length > 28 ? cleaned.substring(0, 28) + '...' : cleaned;
+      }
+    }
+    return '未命名精华';
   },
 
   displayHeading(text) {
