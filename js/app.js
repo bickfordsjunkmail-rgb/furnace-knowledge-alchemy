@@ -183,6 +183,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await openDB();
   await migrateLegacyCardsToDocuments();
   Alchemist.init();
+  UI.renderHomeReview();
 
   // --- 标签切换 ---
   document.querySelectorAll('.tab').forEach(tab => {
@@ -329,9 +330,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (e.target.classList.contains('cat-tag')) {
       document.querySelectorAll('.cat-tag').forEach(t => t.classList.remove('active'));
       e.target.classList.add('active');
-      UI.renderShelf(e.target.dataset.cat);
+      UI.renderShelf(e.target.dataset.cat, UI.currentView);
     }
   });
+
+  const shelfViewFilters = document.getElementById('shelfViewFilters');
+  if (shelfViewFilters) {
+    shelfViewFilters.addEventListener('click', (e) => {
+      if (!e.target.classList.contains('view-chip')) return;
+      UI.renderShelf(UI.currentCategory, e.target.dataset.view);
+    });
+  }
 
   // --- 搜索 ---
   const searchBox = document.getElementById('searchBox');
@@ -396,6 +405,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     const model = modelInput.value.trim() || 'deepseek-v4-pro';
     localStorage.setItem('ds_model', model);
   });
+
+  const btnExportBackup = document.getElementById('btnExportBackup');
+  const btnImportBackup = document.getElementById('btnImportBackup');
+  const backupImportInput = document.getElementById('backupImportInput');
+
+  if (btnExportBackup) {
+    btnExportBackup.addEventListener('click', async () => {
+      const payload = await exportAllData();
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      link.href = url;
+      link.download = `熔炉-知识炼金-备份-${date}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  if (btnImportBackup && backupImportInput) {
+    btnImportBackup.addEventListener('click', () => backupImportInput.click());
+    backupImportInput.addEventListener('change', async () => {
+      const file = backupImportInput.files?.[0];
+      if (!file) return;
+      try {
+        const text = await readAsText(file);
+        const result = await importAllData(JSON.parse(text));
+        await UI.renderShelf(UI.currentCategory, UI.currentView);
+        alert(`导入完成：${result.documents} 份文档`);
+      } catch (err) {
+        alert(err.message || '备份导入失败，请检查 JSON 文件');
+      } finally {
+        backupImportInput.value = '';
+      }
+    });
+  }
 
   function updateApiStatus() {
     if (DeepSeek.isConfigured()) {

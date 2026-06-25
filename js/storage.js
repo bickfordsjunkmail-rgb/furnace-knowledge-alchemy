@@ -3,7 +3,7 @@
    ============================================ */
 
 const DB_NAME = 'AlchemyFurnace';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let db = null;
 
@@ -190,7 +190,8 @@ function saveDocument(doc) {
       triggers: doc.triggers || '',
       originalQuotes: doc.originalQuotes || [],
       wordCount: doc.wordCount || (doc.content ? doc.content.length : 0),
-      status: doc.status || 'draft',
+      status: doc.status || 'inbox',
+      favorite: doc.favorite || false,
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
@@ -258,6 +259,121 @@ function updateDocument(id, updates) {
     };
     req.onerror = () => reject(req.error);
   });
+}
+
+async function toggleDocumentFavorite(id) {
+  const docs = await getAllDocuments();
+  const doc = docs.find(d => d.id === id);
+  if (!doc) throw new Error('Not found');
+  return updateDocument(id, { favorite: !doc.favorite });
+}
+
+function archiveDocument(id) {
+  return updateDocument(id, { status: 'archived' });
+}
+
+async function getDocumentsByView(view = 'all', category = '全部') {
+  let docs;
+  if (category && category !== '全部') {
+    docs = await getDocumentsByCategory(category);
+  } else {
+    docs = await getAllDocuments();
+  }
+
+  if (view === 'inbox') {
+    return docs.filter(d => (d.status || 'archived') === 'inbox');
+  }
+  if (view === 'favorites') {
+    return docs.filter(d => !!d.favorite);
+  }
+  return docs;
+}
+
+async function getRecentDocuments(limit = 3) {
+  const docs = await getAllDocuments();
+  return docs
+    .filter(d => d.lastOpenedAt || d.favorite)
+    .sort((a, b) => (b.lastOpenedAt || b.updatedAt || b.createdAt || 0) - (a.lastOpenedAt || a.updatedAt || a.createdAt || 0))
+    .slice(0, limit);
+}
+
+async function getDailyReviewDocument(skipId = '') {
+  const docs = await getAllDocuments();
+  if (!docs.length) return null;
+
+  const ranked = docs
+    .filter(d => d.id !== skipId)
+    .sort((a, b) => {
+      const favoriteScore = Number(!!b.favorite) - Number(!!a.favorite);
+      if (favoriteScore !== 0) return favoriteScore;
+      const reviewedScore = (a.reviewedAt || 0) - (b.reviewedAt || 0);
+      if (reviewedScore !== 0) return reviewedScore;
+      return (b.lastOpenedAt || b.createdAt || 0) - (a.lastOpenedAt || a.createdAt || 0);
+    });
+
+  return ranked[0] || docs[0];
+}
+
+function getAllFromStore(storeName) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readonly');
+    const store = tx.objectStore(storeName);
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function exportAllData() {
+  const [documents, cards, rawMaterials] = await Promise.all([
+    getAllFromStore('knowledge_documents'),
+    getAllFromStore('knowledge_cards'),
+    getAllFromStore('raw_materials')
+  ]);
+  return {
+    app: '熔炉-知识炼金',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    documents,
+    cards,
+    rawMaterials
+  };
+}
+
+function putMany(storeName, items) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    for (const item of items || []) {
+      store.put(item);
+    }
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function importAllData(payload) {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('备份文件格式不正确');
+  }
+
+  const documents = (payload.documents || []).map(doc => ({
+    ...doc,
+    id: doc.id || uuid(),
+    status: doc.status || 'archived',
+    favorite: !!doc.favorite,
+    updatedAt: Date.now()
+  }));
+
+  await putMany('knowledge_documents', documents);
+  if (Array.isArray(payload.cards)) await putMany('knowledge_cards', payload.cards);
+  if (Array.isArray(payload.rawMaterials)) await putMany('raw_materials', payload.rawMaterials);
+
+  return {
+    documents: documents.length,
+    cards: Array.isArray(payload.cards) ? payload.cards.length : 0,
+    rawMaterials: Array.isArray(payload.rawMaterials) ? payload.rawMaterials.length : 0
+  };
 }
 
 async function getDistinctDocumentCategories() {

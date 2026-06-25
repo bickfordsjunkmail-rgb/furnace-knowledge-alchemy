@@ -8,9 +8,9 @@
 <meta http-equiv="Expires" content="0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="manifest" href="manifest.json?v=20260625-reading">
+<link rel="manifest" href="manifest.json?v=20260625-v8">
 <title>熔炉 · 知识炼金</title>
-<link rel="stylesheet" href="css/style.css?v=20260625-reading">
+<link rel="stylesheet" href="css/style.css?v=20260625-v8">
 </head>
 <body>
 
@@ -106,6 +106,8 @@
       </div>
     </div>
 
+    <div class="home-review-card" id="homeReviewEntry"></div>
+
     <!-- 输入区 -->
     <div class="input-section">
       <div class="input-basket" id="inputBasket">
@@ -157,6 +159,12 @@
       </div>
 
       <input type="text" class="search-box" id="searchBox" placeholder="🔍 搜索药瓶...">
+
+      <div class="shelf-view-filters" id="shelfViewFilters">
+        <button class="view-chip active" data-view="all">全部</button>
+        <button class="view-chip" data-view="inbox">收件箱</button>
+        <button class="view-chip" data-view="favorites">收藏</button>
+      </div>
 
       <div class="category-filters" id="categoryFilters">
         <button class="cat-tag active" data-cat="全部">全部</button>
@@ -218,6 +226,16 @@
         未配置 API Key — 将使用本地模拟处理
       </div>
 
+      <div class="backup-card">
+        <div class="backup-title">💾 数据备份</div>
+        <div class="backup-desc">把收件箱、药瓶架、收藏一起导出成 JSON，换手机或清缓存前先备份。</div>
+        <div class="backup-actions">
+          <button id="btnExportBackup" class="btn-soft" type="button">导出备份</button>
+          <button id="btnImportBackup" class="btn-soft" type="button">导入备份</button>
+          <input id="backupImportInput" class="file-input" type="file" accept="application/json,.json">
+        </div>
+      </div>
+
       <div style="background:var(--bg-card);border-radius:var(--radius);padding:16px;margin-bottom:16px;">
         <div style="font-size:0.85rem;font-weight:600;color:var(--wood-dark);margin-bottom:8px;">📱 在手机上使用</div>
         <div style="font-size:0.8rem;color:var(--text-light);line-height:1.6;">
@@ -239,12 +257,12 @@
   </div>
 </div>
 
-<script src="js/storage.js?v=20260625-reading"></script>
-<script src="js/deepseek.js?v=20260625-reading"></script>
-<script src="js/alchemist.js?v=20260625-reading"></script>
-<script src="js/pipeline.js?v=20260625-reading"></script>
-<script src="js/ui.js?v=20260625-reading"></script>
-<script src="js/app.js?v=20260625-reading"></script>
+<script src="js/storage.js?v=20260625-v8"></script>
+<script src="js/deepseek.js?v=20260625-v8"></script>
+<script src="js/alchemist.js?v=20260625-v8"></script>
+<script src="js/pipeline.js?v=20260625-v8"></script>
+<script src="js/ui.js?v=20260625-v8"></script>
+<script src="js/app.js?v=20260625-v8"></script>
 
 </body>
 </html>

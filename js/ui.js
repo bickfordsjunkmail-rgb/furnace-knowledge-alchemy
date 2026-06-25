@@ -4,6 +4,7 @@
 
 const UI = {
   currentCategory: '全部',
+  currentView: 'all',
   currentCards: [],
 
   // 分类图标映射
@@ -29,20 +30,68 @@ const UI = {
     `;
   },
 
+  renderShelfViewFilters() {
+    const container = document.getElementById('shelfViewFilters');
+    if (!container) return;
+    const views = [
+      ['all', '全部'],
+      ['inbox', '收件箱'],
+      ['favorites', '收藏']
+    ];
+    container.innerHTML = views.map(([view, label]) => `
+      <button class="view-chip ${this.currentView === view ? 'active' : ''}" data-view="${view}">${label}</button>
+    `).join('');
+  },
+
+  async renderHomeReview() {
+    const container = document.getElementById('homeReviewEntry');
+    if (!container) return;
+    const daily = await getDailyReviewDocument();
+    const docs = await getRecentDocuments(3);
+    if (!daily && !docs.length) {
+      container.innerHTML = `
+        <div class="home-review-title">今日回看</div>
+        <div class="home-review-empty">收藏或打开过的精华，会出现在这里。</div>
+      `;
+      return;
+    }
+
+    container.innerHTML = `
+      ${daily ? `
+        <div class="daily-review-card">
+          <div class="daily-review-kicker">今日回看</div>
+          <button class="daily-review-main" onclick="UI.openDailyReview('${daily.id}')">
+            <strong>${this.escape(this.cleanReadingText(daily.title))}</strong>
+            <span>${this.escape(this.displaySummary(daily.summary || daily.content || ''))}</span>
+          </button>
+          <button class="daily-review-shuffle" onclick="UI.shuffleDailyReview('${daily.id}')">换一条</button>
+        </div>
+      ` : ''}
+      ${docs.length ? `
+        <div class="home-review-title">最近回看</div>
+        <div class="home-review-list">
+          ${docs.map(doc => `
+            <button class="home-review-item" onclick="UI.openDocument('${doc.id}')">
+              <span>${doc.favorite ? '★' : '↺'}</span>
+              <strong>${this.escape(this.cleanReadingText(doc.title))}</strong>
+            </button>
+          `).join('')}
+        </div>
+      ` : ''}
+    `;
+  },
+
   // --- 渲染魔药架 ---
-  async renderShelf(category = '全部') {
+  async renderShelf(category = '全部', view = this.currentView) {
     this.currentCategory = category;
+    this.currentView = view;
     const grid = document.getElementById('cardGrid');
     if (!grid) return;
 
+    this.renderShelfViewFilters();
     await this.renderCategoryFilters();
 
-    let docs;
-    if (category === '全部') {
-      docs = await getAllDocuments();
-    } else {
-      docs = await getDocumentsByCategory(category);
-    }
+    const docs = await getDocumentsByView(view, category);
     this.currentCards = docs;
 
     if (docs.length === 0) {
@@ -73,10 +122,16 @@ const UI = {
     const sectionCount = Array.isArray(doc.sections) ? doc.sections.length : 0;
     const title = this.cleanReadingText(doc.title);
     const summary = this.cleanReadingText(doc.summary || doc.content?.substring(0, 90) || '');
+    const statusLabel = (doc.status || 'archived') === 'inbox' ? '收件箱' : '已入库';
+    const favoriteLabel = doc.favorite ? '已收藏' : '收藏';
     return `
       <article class="document-card" style="--cat-color:${color}" onclick="UI.openDocument('${doc.id}')">
         <div class="document-icon">${icon}</div>
         <div class="document-main">
+          <div class="document-card-top">
+            <span class="status-pill ${doc.status === 'inbox' ? 'inbox' : ''}">${statusLabel}</span>
+            <button class="favorite-toggle ${doc.favorite ? 'active' : ''}" onclick="event.stopPropagation(); UI.toggleFavorite('${doc.id}')" aria-label="${favoriteLabel}">${doc.favorite ? '★' : '☆'}</button>
+          </div>
           <div class="document-title">${this.escape(title)}</div>
           <div class="document-summary">${this.escape(summary)}</div>
           <div class="document-meta">
@@ -96,7 +151,14 @@ const UI = {
       return;
     }
 
-    const docs = await searchDocuments(query);
+    const q = query.toLowerCase();
+    const docs = (await getDocumentsByView(this.currentView, this.currentCategory)).filter(d =>
+      (d.title || '').toLowerCase().includes(q) ||
+      (d.summary || '').toLowerCase().includes(q) ||
+      (d.content || '').toLowerCase().includes(q) ||
+      (d.fileName || '').toLowerCase().includes(q) ||
+      (d.tags || []).some(t => String(t).toLowerCase().includes(q))
+    );
     this.currentCards = docs;
     const grid = document.getElementById('cardGrid');
     if (!grid) return;
@@ -118,6 +180,7 @@ const UI = {
     const docs = await getAllDocuments();
     const doc = docs.find(d => d.id === id);
     if (!doc) return;
+    await updateDocument(id, { lastOpenedAt: Date.now() });
 
     const modal = document.getElementById('modalOverlay');
     const content = document.getElementById('modalContent');
@@ -152,22 +215,37 @@ const UI = {
         <span class="card-tag">来源：${this.escape(doc.source || '手动投料')}</span>
       </div>
 
-      ${doc.sections && doc.sections.length > 0 ? `
-        <div class="reading-content">
-          ${doc.sections.map((section, idx) => `
-            <section class="document-section">
-              <div class="section-card-header">
-                <h2>${this.escape(this.displayHeading(section.heading || `小节 ${idx + 1}`))}</h2>
-                ${section.summary ? `<p>${this.escape(this.displaySummary(section.summary))}</p>` : ''}
-              </div>
-              <div class="section-body">${this.renderSectionBody(section)}</div>
-              ${this.renderKeySentence(section)}
-            </section>
-          `).join('')}
+      <div class="reading-mode-tabs">
+        <button class="active" data-mode="essence" onclick="UI.switchReadingMode('essence')">精华</button>
+        <button data-mode="original" onclick="UI.switchReadingMode('original')">原文</button>
+      </div>
+
+      <div class="essence-mode reading-mode-panel active">
+        ${doc.sections && doc.sections.length > 0 ? `
+          <div class="reading-content">
+            ${doc.sections.map((section, idx) => `
+              <section class="document-section">
+                <div class="section-card-header">
+                  <h2>${this.escape(this.displayHeading(section.heading || `小节 ${idx + 1}`))}</h2>
+                  ${section.summary ? `<p>${this.escape(this.displaySummary(section.summary))}</p>` : ''}
+                </div>
+                <div class="section-body">${this.renderSectionBody(section)}</div>
+                ${this.renderKeySentence(section)}
+              </section>
+            `).join('')}
+          </div>
+        ` : `
+          <div class="reading-content">${this.renderReadingBlocks(doc.content || '')}</div>
+        `}
+      </div>
+
+      <div class="original-mode reading-mode-panel">
+        <div class="original-toolbar">
+          <span>完整原文</span>
+          <button class="btn-soft btn-mini" onclick="UI.copyOriginalText('${doc.id}')">复制原文</button>
         </div>
-      ` : `
-        <div class="reading-content">${this.renderReadingBlocks(doc.content || '')}</div>
-      `}
+        <div class="original-content">${this.renderOriginalContent(doc.content || '')}</div>
+      </div>
 
       ${doc.originalQuotes && doc.originalQuotes.length > 0 ? `
         <div class="modal-quotes">
@@ -185,6 +263,14 @@ const UI = {
         </div>
       ` : ''}
       <div style="display:flex;gap:8px;">
+        ${(doc.status || 'archived') === 'inbox' ? `
+          <button onclick="UI.archiveCurrentDocument('${doc.id}')" class="btn-soft">
+            入库
+          </button>
+        ` : ''}
+        <button onclick="UI.toggleFavorite('${doc.id}')" class="btn-soft">
+          ${doc.favorite ? '取消收藏' : '收藏'}
+        </button>
         <button onclick="UI.deleteDocument('${doc.id}')" class="btn-danger">
           🗑 丢弃
         </button>
@@ -192,22 +278,95 @@ const UI = {
     `;
 
     modal.style.display = 'flex';
+    await this.renderHomeReview();
   },
 
   closeModal() {
     document.getElementById('modalOverlay').style.display = 'none';
   },
 
+  switchReadingMode(mode) {
+    document.querySelectorAll('.reading-mode-tabs button').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+    document.querySelectorAll('.reading-mode-panel').forEach(panel => {
+      panel.classList.toggle('active', panel.classList.contains(`${mode}-mode`));
+    });
+  },
+
+  async copyOriginalText(id) {
+    const docs = await getAllDocuments();
+    const doc = docs.find(d => d.id === id);
+    if (!doc) return;
+    const text = doc.content || '';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      alert('原文已复制');
+      return;
+    }
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    textarea.remove();
+    alert('原文已复制');
+  },
+
+  async openDailyReview(id) {
+    await updateDocument(id, { reviewedAt: Date.now() });
+    await this.openDocument(id);
+  },
+
+  async shuffleDailyReview(currentId) {
+    const container = document.getElementById('homeReviewEntry');
+    if (!container) return;
+    const daily = await getDailyReviewDocument(currentId);
+    if (!daily) return;
+    const card = container.querySelector('.daily-review-card');
+    if (!card) {
+      await this.renderHomeReview();
+      return;
+    }
+    card.outerHTML = `
+      <div class="daily-review-card">
+        <div class="daily-review-kicker">今日回看</div>
+        <button class="daily-review-main" onclick="UI.openDailyReview('${daily.id}')">
+          <strong>${this.escape(this.cleanReadingText(daily.title))}</strong>
+          <span>${this.escape(this.displaySummary(daily.summary || daily.content || ''))}</span>
+        </button>
+        <button class="daily-review-shuffle" onclick="UI.shuffleDailyReview('${daily.id}')">换一条</button>
+      </div>
+    `;
+  },
+
   async changeDocumentCategory(id, newCategory) {
     await updateDocument(id, { category: newCategory });
-    await this.renderShelf(this.currentCategory);
+    await this.renderShelf(this.currentCategory, this.currentView);
+  },
+
+  async toggleFavorite(id) {
+    await toggleDocumentFavorite(id);
+    await this.renderShelf(this.currentCategory, this.currentView);
+    await this.renderHomeReview();
+    const modal = document.getElementById('modalOverlay');
+    if (modal && modal.style.display === 'flex') {
+      await this.openDocument(id);
+    }
+  },
+
+  async archiveCurrentDocument(id) {
+    await archiveDocument(id);
+    await this.renderShelf(this.currentCategory, this.currentView);
+    await this.openDocument(id);
   },
 
   async deleteDocument(id) {
     if (!confirm('确定要丢弃这瓶魔药吗？')) return;
     await deleteDocument(id);
     this.closeModal();
-    await this.renderShelf(this.currentCategory);
+    await this.renderShelf(this.currentCategory, this.currentView);
+    await this.renderHomeReview();
   },
 
   // --- 工具函数 ---
@@ -344,6 +503,17 @@ const UI = {
         ${block.body.map(line => `<p>${this.escape(line)}</p>`).join('')}
       </div>
     `).join('');
+  },
+
+  renderOriginalContent(text) {
+    if (!text) return '<p>暂无原文</p>';
+    return String(text)
+      .replace(/\r\n/g, '\n')
+      .split(/\n{2,}/)
+      .map(part => part.trim())
+      .filter(Boolean)
+      .map(part => `<p>${this.escape(part)}</p>`)
+      .join('');
   },
 
   renderMarkdownLite(text) {
