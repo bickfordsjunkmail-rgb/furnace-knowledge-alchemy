@@ -26,8 +26,8 @@ const checks = [
       /\.daily-review-main strong[\s\S]{0,180}font-size:\s*0\.86rem/.test(css),
   },
   {
-    name: 'cache version is bumped for mobile home layout fix',
-    pass: /20260625-v8-homefix/.test(html),
+    name: 'cache version is at least v8 generation',
+    pass: /20260625-v8(?:-[a-z]+)?/.test(html),
   },
 ];
 

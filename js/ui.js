@@ -191,7 +191,7 @@ const UI = {
 
     content.innerHTML = `
       <header class="reading-header">
-        <div class="reading-source">${this.escape(doc.fileName || doc.source || '手动投料')}</div>
+        <div class="reading-source compact">${this.escape(doc.fileName || doc.source || '手动投料')}</div>
         <h1 class="modal-title">${this.escape(displayTitle)}</h1>
         <div class="modal-essence">💡 ${this.escape(displaySummary)}</div>
         ${readingKeywords.length ? `
@@ -221,22 +221,8 @@ const UI = {
       </div>
 
       <div class="essence-mode reading-mode-panel active">
-        ${doc.sections && doc.sections.length > 0 ? `
-          <div class="reading-content">
-            ${doc.sections.map((section, idx) => `
-              <section class="document-section">
-                <div class="section-card-header">
-                  <h2>${this.escape(this.displayHeading(section.heading || `小节 ${idx + 1}`))}</h2>
-                  ${section.summary ? `<p>${this.escape(this.displaySummary(section.summary))}</p>` : ''}
-                </div>
-                <div class="section-body">${this.renderSectionBody(section)}</div>
-                ${this.renderKeySentence(section)}
-              </section>
-            `).join('')}
-          </div>
-        ` : `
-          <div class="reading-content">${this.renderReadingBlocks(doc.content || '')}</div>
-        `}
+        ${this.renderEssenceNote(doc)}
+        ${this.renderMoreBreakdown(doc)}
       </div>
 
       <div class="original-mode reading-mode-panel">
@@ -497,6 +483,74 @@ const UI = {
         <span>关键句</span>
         <strong>${this.escape(keySentence)}</strong>
       </div>
+    `;
+  },
+
+  firstUsefulParagraph(doc) {
+    const source = [
+      doc.summary,
+      ...(Array.isArray(doc.sections) ? doc.sections.map(section => section.summary || section.content) : []),
+      doc.content
+    ].filter(Boolean).join('\n');
+    return this.readingParagraphs(source).find(line => line.length > 12) || this.cleanReadingText(doc.summary || doc.title || '');
+  },
+
+  collectKeySentences(doc, limit = 3) {
+    const sections = Array.isArray(doc.sections) ? doc.sections : [];
+    const points = sections
+      .map(section => this.extractKeySentence(section))
+      .filter(Boolean);
+    if (!points.length && doc.summary) points.push(this.cleanReadingText(doc.summary));
+    return [...new Set(points)].slice(0, limit);
+  },
+
+  renderEssenceNote(doc) {
+    const core = this.firstUsefulParagraph(doc);
+    const scene = this.cleanReadingText(doc.triggers || doc.category || '适合在遇到相似问题时快速回看。');
+    const actions = this.collectKeySentences(doc, 2);
+    const keyLines = this.collectKeySentences(doc, 3);
+
+    return `
+      <div class="note-reading">
+        <section class="note-section note-core">
+          <span>核心结论</span>
+          <p>${this.escape(core)}</p>
+        </section>
+        <section class="note-section">
+          <span>适用场景</span>
+          <p>${this.escape(scene)}</p>
+        </section>
+        <section class="note-section">
+          <span>行动建议</span>
+          ${actions.length ? actions.map(line => `<p>${this.escape(line)}</p>`).join('') : '<p>回看核心结论，挑一句今天能用的行动。</p>'}
+        </section>
+        <section class="note-section note-key-lines">
+          <span>关键句</span>
+          ${keyLines.map(line => `<strong>${this.escape(line)}</strong>`).join('')}
+        </section>
+      </div>
+    `;
+  },
+
+  renderMoreBreakdown(doc) {
+    const sections = Array.isArray(doc.sections) ? doc.sections : [];
+    if (!sections.length) return '';
+    return `
+      <details class="more-breakdown">
+        <summary>展开更多拆解</summary>
+        <div class="reading-content compact-breakdown">
+          ${sections.map((section, idx) => `
+            <section class="document-section">
+              <div class="section-card-header">
+                <h2>${this.escape(this.displayHeading(section.heading || `小节 ${idx + 1}`))}</h2>
+                ${section.summary ? `<p>${this.escape(this.displaySummary(section.summary))}</p>` : ''}
+              </div>
+              <div class="section-body">${this.renderSectionBody(section)}</div>
+              ${this.renderKeySentence(section)}
+            </section>
+          `).join('')}
+        </div>
+      </details>
     `;
   },
 

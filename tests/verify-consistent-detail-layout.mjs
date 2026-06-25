@@ -7,8 +7,9 @@ const css = readFileSync(join(root, 'css', 'style.css'), 'utf8');
 
 const checks = [
   {
-    name: 'document sections render as direct reading cards, not hidden detail drawers',
-    pass: !/<details/.test(ui) &&
+    name: 'document sections are hidden behind a single optional breakdown drawer',
+    pass: /<details class="more-breakdown">/.test(ui) &&
+      /renderMoreBreakdown\(doc\)/.test(ui) &&
       !/section-toggle-hint/.test(ui),
   },
   {
